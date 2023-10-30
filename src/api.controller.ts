@@ -1,12 +1,28 @@
-import { Controller, Get, Param, Req, Patch, Body, Put, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Req,
+  Patch,
+  Body,
+  Put,
+  Delete,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { ApiService } from './api.service';
 import { ConfigService } from '@nestjs/config';
-import {SheetInsertDto, SheetQueryDto, SheetUpdateDto} from "./dto/sheet-update.dto";
+import {
+  SheetInsertDto,
+  SheetQueryDto,
+  SheetUpdateDto,
+} from './dto/sheet-update.dto';
 
 @Controller('/api')
 export class ApiController {
-  constructor(private readonly apiService: ApiService, private configService: ConfigService) {}
+  constructor(
+    private readonly apiService: ApiService,
+    private configService: ConfigService,
+  ) {}
 
   @Get(':sheetId')
   getAllRows(@Param() params: any, @Req() request: Request): Promise<Record<string, any>> {
@@ -21,7 +37,7 @@ export class ApiController {
   search(@Param() params: any, @Req() request: Request): any {
     const sheet: string = request.query._sheet as string;
 
-    const predicates = {...request.query};
+    const predicates = { ...request.query };
     delete predicates._sheet;
 
     return this.apiService.search(params.sheetId, sheet, predicates, 'and');
