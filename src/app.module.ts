@@ -5,11 +5,14 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApiController } from './api.controller';
+import { LoginController } from './login/login.controller';
 import { ApiService } from './api.service';
 import service_account from './config/service_account';
 import { UsersModule } from "./users/users.module";
 import { UsersService } from "./users/users.service";
 import { User } from './users/user.entity';
+import { RateLimiterService } from './rate-limiter/rate-limiter.service';
+import { LoginController } from './login/login.controller';
 
 @Module({
   imports: [
@@ -30,8 +33,8 @@ import { User } from './users/user.entity';
       autoLoadEntities: true,
     }),
   ],
-  controllers: [AppController, ApiController],
-  providers: [AppService, ApiService],
+  controllers: [AppController, ApiController, LoginController],
+  providers: [AppService, ApiService, RateLimiterService],
 })
 export class AppModule {
   constructor(private dataSource: DataSource) {};

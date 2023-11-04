@@ -1,6 +1,6 @@
 export class SheetQueryDto {
   logic?: 'and' | 'or';
-  rules: Record<string, string|string[]|number|number[]>;
+  rules: Record<string, string | string[] | number | number[]>;
 }
 
 export class SheetUpdateDto {
