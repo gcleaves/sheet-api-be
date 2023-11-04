@@ -243,7 +243,8 @@ export class ApiService {
       data: payload
     }), {
       numOfAttempts: 5,
-      startingDelay: 500,
+      startingDelay: 1000,
+      jitter: "full",
       retry: (e, attemptNumber) => {
         const status = e.toJSON().status;
         if(status===429) {
