@@ -1,34 +1,38 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './user.entity';
+import {Injectable} from '@nestjs/common';
+import {InjectRepository} from '@nestjs/typeorm';
+import {Repository} from 'typeorm';
+import {User} from './user.entity';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
-  ) {}
+    constructor(
+        @InjectRepository(User)
+        private usersRepository: Repository<User>,
+    ) {
+    }
 
-  findAll(): Promise<User[]> {
-    return this.usersRepository.find();
-  }
+    findAll(): Promise<User[]> {
+        return this.usersRepository.find();
+    }
 
-  findOne(id: number): Promise<User | null> {
-    return this.usersRepository.findOneBy({ id });
-  }
+    findOne(sub: string): Promise<User | null> {
+        if(!sub) return null;
+        return this.usersRepository.findOneBy({ sub });
+    }
 
     async create(user: Partial<User>): Promise<User> {
         const newuser = this.usersRepository.create(user);
         return this.usersRepository.save(newuser);
     }
 
-    async update(id: number, user: Partial<User>): Promise<User> {
-        await this.usersRepository.update(id, user);
-        return this.usersRepository.findOne({ where: { id } });
+    async update(sub: string, user: Partial<User>): Promise<User> {
+        if(!sub) return null;
+        await this.usersRepository.update(sub, user);
+        return this.usersRepository.findOne({where: {sub}});
     }
 
-    async delete(id: number): Promise<void> {
-        await this.usersRepository.delete(id);
+    async delete(sub: string): Promise<void> {
+        if(!sub) throw new Error('You must provide a sub');
+        await this.usersRepository.delete(sub);
     }
 }
