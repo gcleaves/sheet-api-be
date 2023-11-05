@@ -9,10 +9,7 @@ import { LoginController } from './login/login.controller';
 import { ApiService } from './api.service';
 import service_account from './config/service_account';
 import { UsersModule } from "./users/users.module";
-import { UsersService } from "./users/users.service";
-import { User } from './users/user.entity';
 import { RateLimiterService } from './rate-limiter/rate-limiter.service';
-import { LoginController } from './login/login.controller';
 
 @Module({
   imports: [

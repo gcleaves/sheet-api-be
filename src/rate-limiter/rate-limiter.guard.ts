@@ -21,8 +21,11 @@ export class RateLimiterGuard implements CanActivate {
         context: ExecutionContext,
     ): boolean | Promise<boolean> | Observable<boolean> {
 
-        const rateLimiterParams = this.reflector.get(RateLimiter, context.getHandler());
-        const rateLimiterKey = this.reflector.get(RateLimiterKey, context.getHandler()) || 'global';
+        const rateLimiterParams = this.reflector.get(RateLimiter, context.getHandler()) ||
+            this.reflector.get(RateLimiter, context.getClass());
+        console.log('rateLimiterParams',rateLimiterParams)
+        const rateLimiterKey = this.reflector.get(RateLimiterKey, context.getHandler()) ||
+            this.reflector.get(RateLimiterKey, context.getClass()) || 'global';
         const opts = rateLimiterParams || this.opts;
 
         if(!this.limiters[JSON.stringify(opts)]) {

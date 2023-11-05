@@ -8,7 +8,7 @@ export class AppService {
 
   getHello(): string {
     const u = new User();
-    u.lastName = 'Cleaves'
+    //u.lastName = 'Cleaves'
     //this.userService.create(u)
     return 'Hello World! geoff';
 
