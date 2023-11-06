@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import {Sheet} from "../sheets/sheet.entity";
 
 @Entity()
 export class User {
@@ -25,4 +26,7 @@ export class User {
 
   @Column({ default: null })
   service_account: string;
+
+  @OneToMany(type => Sheet, sheet => sheet.user)
+  sheets: Sheet[];
 }
