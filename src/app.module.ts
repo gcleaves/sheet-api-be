@@ -15,6 +15,8 @@ import { SheetsService } from './sheets/sheets.service';
 import { SheetsModule } from './sheets/sheets.module';
 import {User} from "./users/user.entity";
 import {Sheet} from "./sheets/sheet.entity";
+import { ServiceAccountsController } from './service-accounts/service-accounts.controller';
+import { ServiceAccountsModule } from './service-accounts/service-accounts.module';
 
 @Module({
   imports: [
@@ -35,8 +37,9 @@ import {Sheet} from "./sheets/sheet.entity";
       autoLoadEntities: true,
     }),
     SheetsModule,
+    ServiceAccountsModule,
   ],
-  controllers: [AppController, ApiController, LoginController, SheetsController],
+  controllers: [AppController, ApiController, LoginController, SheetsController, ServiceAccountsController],
   providers: [AppService, ApiService, RateLimiterService, SheetsService],
 })
 export class AppModule {

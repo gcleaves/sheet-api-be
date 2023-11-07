@@ -14,6 +14,11 @@ export class UsersService {
         return this.usersRepository.find();
     }
 
+    findOneWithRelations(options): Promise<User | null> {
+        //if(!sub) return null;
+        return this.usersRepository.findOne(options);
+    }
+
     findOne(sub: string): Promise<User | null> {
         if(!sub) return null;
         return this.usersRepository.findOneBy({ sub });

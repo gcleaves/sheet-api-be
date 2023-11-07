@@ -21,7 +21,13 @@ export class ApiController {
     async getSettings(@Req() req: Request, @Res() res: Response) {
         const sub = req.session.user?.sub;
         console.log('sub', sub);
-        const user = await this.userService.findOne(sub);
+        const user = await this.userService.findOneWithRelations({
+            relations: {
+                'service_accounts': true
+            },
+
+            where: {id: req.session.user.id}
+        })
         console.log('user', user);
 
         if(!user) {

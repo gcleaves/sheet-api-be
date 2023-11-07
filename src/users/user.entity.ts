@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import {Sheet} from "../sheets/sheet.entity";
+import {ServiceAccount} from "../service-accounts/service-account.entity";
 
 @Entity()
 export class User {
@@ -27,6 +28,9 @@ export class User {
   @Column({ default: null })
   service_account: string;
 
-  @OneToMany(type => Sheet, sheet => sheet.user)
+  @OneToMany(type => Sheet, sheet => sheet.user, {eager: false})
   sheets: Sheet[];
+
+  @OneToMany(type => ServiceAccount, serviceAccount => serviceAccount.user, {eager: false})
+  service_accounts: ServiceAccount[];
 }
