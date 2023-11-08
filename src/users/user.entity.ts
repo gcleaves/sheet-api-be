@@ -25,12 +25,12 @@ export class User {
   @Column({ default: 'service_account' })
   access_method: string;
 
-  @Column({ default: null })
-  service_account: string;
+  @Column({type: 'json'})
+  service_account: {};
 
   @OneToMany(type => Sheet, sheet => sheet.user, {eager: false})
   sheets: Sheet[];
 
-  @OneToMany(type => ServiceAccount, serviceAccount => serviceAccount.user, {eager: false})
-  service_accounts: ServiceAccount[];
+  //@OneToMany(type => ServiceAccount, serviceAccount => serviceAccount.user, {eager: false})
+  //service_accounts: ServiceAccount[];
 }

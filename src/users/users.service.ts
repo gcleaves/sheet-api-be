@@ -31,8 +31,8 @@ export class UsersService {
 
     async update(sub: string, user: Partial<User>): Promise<User> {
         if(!sub) return null;
-        await this.usersRepository.update(sub, user);
-        return this.usersRepository.findOne({where: {sub}});
+        console.log('update response', await this.usersRepository.update({sub}, user));
+        return this.findOne(sub);
     }
 
     async delete(sub: string): Promise<void> {

@@ -19,15 +19,12 @@ export class ApiController {
 
     @Get('settings')
     async getSettings(@Req() req: Request, @Res() res: Response) {
+        if(!req.session.user) {
+            throw {message: 'you must log in', statusCode: 401}
+        }
         const sub = req.session.user?.sub;
         console.log('sub', sub);
-        const user = await this.userService.findOneWithRelations({
-            relations: {
-                'service_accounts': true
-            },
-
-            where: {id: req.session.user.id}
-        })
+        const user = await this.userService.findOne(req.session.user.sub)
         console.log('user', user);
 
         if(!user) {
@@ -40,6 +37,33 @@ export class ApiController {
         res.send(user);
         return;
     }
+
+    @Patch('settings')
+    async updateSettings(@Req() req: Request, @Res() res: Response) {
+        console.log('patch settings body', req.body);
+        if(!req.session.user) {
+            throw {message: 'you must log in', statusCode: 401}
+        }
+        const user = await this.userService.findOne(req.session.user.sub)
+        if(!user) {
+            throw {message: 'you must log in', statusCode: 401}
+        }
+
+        let sa;
+        try {
+            sa = JSON.parse(req.body.service_account)
+        } catch (e) {
+            throw {message: 'JSON error', statusCode: 400}
+        }
+
+        res.send(await this.userService.update(req.session.user.sub, {
+            access_method: req.body.access_method,
+            service_account: sa
+        }));
+
+        return;
+    }
+
 
     @Get('sheet/:sheetId')
     getAllRows(@Param() params: any, @Req() request: Request): Promise<Record<string, any>> {
