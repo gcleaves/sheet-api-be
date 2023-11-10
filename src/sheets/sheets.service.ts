@@ -24,6 +24,11 @@ export class SheetsService {
         return this.sheetsRepository.findBy(where);
     }
 
+    findOneWithOptions(options): Promise<Sheet | null> {
+        //if(!id) return null;
+        return this.sheetsRepository.findOne(options);
+    }
+
     findOne(id: number): Promise<Sheet | null> {
         if(!id) return null;
         return this.sheetsRepository.findOneBy({ id });

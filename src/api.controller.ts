@@ -55,6 +55,13 @@ export class ApiController {
         } catch (e) {
             throw {message: 'JSON error', statusCode: 400}
         }
+        if (
+            !(typeof sa === 'object' &&
+            !Array.isArray(sa) &&
+            sa !== null)
+        ) {
+            throw {message: 'JSON error, must be an object', statusCode: 400}
+        }
 
         res.send(await this.userService.update(req.session.user.sub, {
             access_method: req.body.access_method,
