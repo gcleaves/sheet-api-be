@@ -1,7 +1,8 @@
-import {Controller, Get, Req} from '@nestjs/common';
+import {Controller, Delete, Get, Patch, Post, Req} from '@nestjs/common';
 import {Request} from 'express';
 import {ConfigService} from "@nestjs/config";
 import {SheetsService} from "./sheets.service";
+import {User} from "../users/user.entity"
 
 @Controller('/api/sheets')
 export class SheetsController {
@@ -9,6 +10,20 @@ export class SheetsController {
         private configService: ConfigService,
         private sheetsService: SheetsService
     ) {}
+
+    @Delete(':id')
+    async deleteSheet(@Req() req: Request) {
+        console.log('delete sheet', req.params)
+        if(!req.session.user) throw {message:'You must log in', statusCode: 401};
+        const exist = await this.sheetsService.exist({
+            relations: ['user'],
+            loadRelationIds: true,
+            where: {id: +req.params.id, 'user.id': req.session.user.id}
+        });
+
+        if(! exist) throw {message:'Not found', statusCode: 404};
+        return this.sheetsService.delete(+req.params.id);
+    }
 
     @Get()
     async getSheets(@Req() req: Request) {
@@ -28,5 +43,29 @@ export class SheetsController {
         });
         if(req.session.user.id!==sheet.user as unknown as number) throw {message:'You cannot do this', statusCode: 403};
         return sheet;
+    }
+
+    @Patch(':id')
+    async updateSheet(@Req() req: Request) {
+        const sheet = await this.sheetsService.findOneWithOptions({
+            relations: ['user'],
+            loadRelationIds: true,
+            where: {id: req.params.id, 'user.id': req.session.user.id}
+        });
+        if(!sheet) throw {message:'Not found', statusCode: 404};
+        return this.sheetsService.update(sheet.id, req.body);
+    }
+
+    @Post()
+    async createSheet(@Req() req: Request) {
+        console.log('createSheet', req.body);
+        if(!req.session.user) throw {message:'You must log in', statusCode: 401};
+        const newSheet = {
+            name: req.body.name,
+            sheet_id: req.body.sheet_id,
+            api_keys: req.body.api_keys,
+            user: {id: req.session.user.id} as User
+        }
+        return await this.sheetsService.create(newSheet);
     }
 }

@@ -26,7 +26,10 @@ export class User {
   access_method: string;
 
   @Column({type: 'json'})
-  service_account: {};
+  service_account: {
+    client_email: string,
+    private_key: string
+  };
 
   @OneToMany(type => Sheet, sheet => sheet.user, {eager: false})
   sheets: Sheet[];

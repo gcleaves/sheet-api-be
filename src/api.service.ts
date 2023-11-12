@@ -5,6 +5,7 @@ import axios from 'axios';
 import {GoogleSpreadsheet, GoogleSpreadsheetRow, GoogleSpreadsheetWorksheet} from 'google-spreadsheet';
 import { JWT } from 'google-auth-library'
 import { backOff } from "exponential-backoff";
+import {SheetsService} from "./sheets/sheets.service";
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
@@ -90,23 +91,56 @@ function columnToLetter(column) {
 
 @Injectable()
 export class ApiService {
-  readonly serviceAccountAuth;
+  constructor(
+      private configService: ConfigService,
+      private sheetService: SheetsService
+  ) {}
 
-  constructor(private configService: ConfigService) {
-    this.serviceAccountAuth = new JWT({
-      email: configService.get('service_account.client_email'),
-      key: configService.get('service_account.private_key'),
-      scopes: SCOPES,
+  async getAuthMethod(sheetId: string) {
+    const theSheet = await this.sheetService.findOneWithOptions({
+      relations: ['user'],
+      where: {sheet_id: sheetId}
     });
+    if(theSheet.user.access_method==='service_account') {
+      const serviceAccountAuth = new JWT({
+        email: theSheet.user.service_account.client_email,
+        key: theSheet.user.service_account.private_key,
+        scopes: SCOPES,
+      });
+      return serviceAccountAuth;
+    }
   }
 
   async getSheet(sheetId: string, sheetName: string|null): Promise<GoogleSpreadsheetWorksheet> {
+    const theSheet = await this.sheetService.findOneWithOptions({
+      relations: ['user'],
+      where: {sheet_id: sheetId}
+    });
+    //console.log(theSheet);
+    const serviceAccountAuth = new JWT({
+      email: theSheet.user.service_account.client_email,
+      key: theSheet.user.service_account.private_key,
+      scopes: SCOPES,
+    });
+
     let doc;
     try {
-      doc = new GoogleSpreadsheet(sheetId, this.serviceAccountAuth);
-      await backOff(()=>doc.loadInfo());
+      doc = new GoogleSpreadsheet(sheetId, serviceAccountAuth);
+      await backOff(()=>doc.loadInfo(),
+          {
+            retry: (e, attemptNumber) => {
+              if(e.code==429) return true;
+              throw e;
+            }
+          });
+      //await doc.loadInfo();
     } catch (e) {
-      throw {message: e.message, statusCode: e.toJSON().status};
+      console.error(e);
+      let message = e.message;
+      if(e.response && e.response.data) {
+        message = e.response.data;
+      }
+      throw {message: message, statusCode: 500}; //
     }
     const sheet = (sheetName) ? doc.sheetsByTitle[sheetName] : doc.sheetsByIndex[0];
     if(!sheet) throw {message: `Sheet ${sheetName} not found.`, statusCode: 404};
@@ -232,8 +266,8 @@ export class ApiService {
       payload.data.push(rangePayload);
     }
     console.dir(payload, {depth: 5});
-
-    const bearerToken = (await this.serviceAccountAuth.getAccessToken()).token;
+    const serviceAccountAuth = await this.getAuthMethod(sheetId);
+    const bearerToken = (await serviceAccountAuth.getAccessToken()).token;
     const response = await backOff(() => axios.request({
       url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,
       method: 'post',
@@ -287,10 +321,11 @@ export class ApiService {
       r._rowNumber = row.rowNumber;
       maxRow = Math.max(maxRow, r._rowNumber);
     }
-    console.log('maxRow', maxRow, 'rowCount', sheet.rowCount);
-    console.log('body', insert);
+    //console.log('maxRow', maxRow, 'rowCount', sheet.rowCount);
+    //console.log('body', insert);
 
-    const bearerToken = (await this.serviceAccountAuth.getAccessToken()).token;
+    const serviceAccountAuth = await this.getAuthMethod(sheetId);
+    const bearerToken = (await serviceAccountAuth.getAccessToken()).token;
     // add rows if necessary
     if((maxRow + insert.length) > sheet.rowCount) {
       console.log("need new rows");
@@ -349,8 +384,8 @@ export class ApiService {
         values.push(value);
       }
 
-      console.log(R1range, A1range);
-      console.log(values);
+      //console.log(R1range, A1range);
+      //console.log(values);
       const rangePayload = {
         range: A1range,
         majorDimension: 'ROWS',
@@ -429,7 +464,8 @@ export class ApiService {
 
     console.dir(deletePayload, {depth: 5});
 
-    const bearerToken = (await this.serviceAccountAuth.getAccessToken()).token;
+    const serviceAccountAuth = await this.getAuthMethod(sheetId);
+    const bearerToken = (await serviceAccountAuth.getAccessToken()).token;
     const response = await backOff(() => axios.request({
       url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
       method: 'post',
