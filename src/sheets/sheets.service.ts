@@ -49,4 +49,8 @@ export class SheetsService {
         if(!id) throw new Error('You must provide a id');
         await this.sheetsRepository.delete(id);
     }
+
+    exist(options): Promise<boolean> {
+        return this.sheetsRepository.exist(options);
+    }
 }

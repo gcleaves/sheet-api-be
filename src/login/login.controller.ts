@@ -18,22 +18,37 @@ export class LoginController {
         );
     }
 
+    @Get('/getAccessLink')
+    getAccessLink(@Req() req: Request) {
+        const scopes = ['profile', 'email','https://www.googleapis.com/auth/spreadsheets'];
+        const url = this.oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: scopes
+        });
+        //console.log(url);
+        //res.redirect(302, url);
+        return url;
+    }
+
     @Get('/logout')
     logout(@Req() req: Request, @Res() res: Response) {
         req.session.user = null;
+
         if(req.query.redirect) {
             res.redirect(this.configService.get<string>('WEB_BASE')+req.query.redirect);
+            return;
         } else {
             res.send("session erased");
+            return;
         }
         //return "session erased";
     }
 
     @Get('/login')
     //@Redirect()
-    login(@Req() request: Request, @Res() response: Response): string {
-        if(request.session.user) {
-            response.redirect(302, this.configService.get<string>('WEB_BASE') + '/app');
+    login(@Req() req: Request, @Res() res: Response): string {
+        if(req.session.user) {
+            res.redirect(302, this.configService.get<string>('WEB_BASE') + '/app');
             return;
             //response.send('you are already logged in');
             //return;
@@ -41,11 +56,13 @@ export class LoginController {
         console.log('no user');
 
         const scopes = ['profile', 'email'];
+        if(req.query.scope==='spreadsheets') scopes.push('https://www.googleapis.com/auth/spreadsheets');
+        //console.log('scopes', scopes, 'query', req);
         const url = this.oauth2Client.generateAuthUrl({
             access_type: 'offline',
             scope: scopes
         });
-        response.redirect(302, url);
+        res.redirect(302, url);
         return;
 
         //return {url, statusCode: 302}
@@ -86,7 +103,7 @@ export class LoginController {
 
     @Get('/login/check')
     async check(@Req() request: Request) {
-        console.log(request.session.user);
+        //console.log(request.session.user);
         return request.session.user || {error: 'not logged in'};
     }
 }
