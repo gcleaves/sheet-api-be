@@ -6,6 +6,7 @@ import {GoogleSpreadsheet, GoogleSpreadsheetRow, GoogleSpreadsheetWorksheet} fro
 import { JWT } from 'google-auth-library'
 import { backOff } from "exponential-backoff";
 import {SheetsService} from "./sheets/sheets.service";
+import { OAuth2Client } from 'google-auth-library';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
@@ -99,7 +100,14 @@ export class ApiService {
   async getAuthMethod(sheetId: string) {
     const theSheet = await this.sheetService.findOneWithOptions({
       relations: ['user'],
-      where: {sheet_id: sheetId}
+      where: {sheet_id: sheetId},
+      select: {
+        user: {
+          access_method: true,
+          refresh_token: true,
+          service_account: true
+        }
+      }
     });
     if(theSheet.user.access_method==='service_account') {
       const serviceAccountAuth = new JWT({
@@ -109,19 +117,20 @@ export class ApiService {
       });
       return serviceAccountAuth;
     }
+    if(theSheet.user.access_method==='oauth') {
+      const oauthClient = new OAuth2Client({
+        clientId: this.configService.get<string>('GOOGLE_CLIENT_ID'),
+        clientSecret: this.configService.get<string>('GOOGLE_CLIENT_SECRET'),
+      });
+      oauthClient.setCredentials({
+        refresh_token: theSheet.user.refresh_token
+      });
+      return oauthClient;
+    }
   }
 
   async getSheet(sheetId: string, sheetName: string|null): Promise<GoogleSpreadsheetWorksheet> {
-    const theSheet = await this.sheetService.findOneWithOptions({
-      relations: ['user'],
-      where: {sheet_id: sheetId}
-    });
-    //console.log(theSheet);
-    const serviceAccountAuth = new JWT({
-      email: theSheet.user.service_account.client_email,
-      key: theSheet.user.service_account.private_key,
-      scopes: SCOPES,
-    });
+    const serviceAccountAuth = await this.getAuthMethod(sheetId);
 
     let doc;
     try {

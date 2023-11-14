@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Req, Res, Patch, Body, Put, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Req, Res, Patch,
+    Body, Put, Delete, UseGuards, UseInterceptors } from '@nestjs/common';
 import {Request, Response} from 'express';
 import {ApiService} from './api.service';
 import {ConfigService} from '@nestjs/config';
@@ -7,6 +8,7 @@ import {RateLimiterGuard} from "./rate-limiter/rate-limiter.guard";
 import {RateLimiter, RateLimiterKey} from "./rate-limiter/rate-limiter.decorator";
 import {UsersService} from "./users/users.service";
 import {SheetsService} from "./sheets/sheets.service";
+import {User} from './users/user.entity'
 
 @Controller('/api')
 @RateLimiter({points: 60, duration: 10, consume: 1})
@@ -20,24 +22,23 @@ export class ApiController {
     ) {}
 
     @Get('settings')
-    async getSettings(@Req() req: Request, @Res() res: Response) {
+    async getSettings(@Req() req: Request): Promise<User> {
         if(!req.session.user) {
             throw {message: 'you must log in', statusCode: 401}
         }
         const sub = req.session.user?.sub;
         //console.log('sub', sub);
-        const user = await this.userService.findOne(req.session.user.sub)
+        const user: User = await this.userService.findOne(req.session.user.sub)
         //console.log('user', user);
 
         if(!user) {
             console.log('no user found');
-            res.status(401).send('No way Jose.');
+            //res.status(401).send('No way Jose.');
             req.session.user = null;
-            return;
+            throw {message: 'No way Jose.', statusCode: 401}
         }
         req.session.user = user;
-        res.send(user);
-        return;
+        return user;
     }
 
     @Patch('settings')
@@ -73,7 +74,6 @@ export class ApiController {
 
         return;
     }
-
 
     @Get('sheet/:sheetId')
     async getAllRows(@Param() params: any, @Req() req: Request): Promise<Record<string, any>> {
