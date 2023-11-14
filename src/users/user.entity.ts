@@ -1,6 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import {Sheet} from "../sheets/sheet.entity";
-import {ServiceAccount} from "../service-accounts/service-account.entity";
 
 @Entity()
 export class User {
@@ -22,8 +21,11 @@ export class User {
   @Column()
   sub: string;
 
+  @Column({select: false})
+  refresh_token: string;
+
   @Column({ default: 'service_account' })
-  access_method: string;
+  access_method: 'service_account'|'oauth';
 
   @Column({type: 'json'})
   service_account: {

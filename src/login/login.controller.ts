@@ -25,8 +25,6 @@ export class LoginController {
             access_type: 'offline',
             scope: scopes
         });
-        //console.log(url);
-        //res.redirect(302, url);
         return url;
     }
 
@@ -54,14 +52,12 @@ export class LoginController {
             //return;
         }
         console.log('no user');
-
-        const scopes = ['profile', 'email'];
-        if(req.query.scope==='spreadsheets') scopes.push('https://www.googleapis.com/auth/spreadsheets');
-        //console.log('scopes', scopes, 'query', req);
-        const url = this.oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: scopes
-        });
+        const authOpts: any = {scope: ['profile', 'email']};
+        if(req.query.scope==='spreadsheets') {
+            authOpts.scope.push('https://www.googleapis.com/auth/spreadsheets');
+            authOpts.access_type = 'offline';
+        }
+        const url = this.oauth2Client.generateAuthUrl(authOpts);
         res.redirect(302, url);
         return;
 
@@ -84,15 +80,27 @@ export class LoginController {
         let user = await this.userService.findOne(decoded.sub as string|null);
         //console.log('user',user);
         if( !user ) {
-            const newUser = {
+            const newUser: any = {
                 name: decoded.name,
                 sub: decoded.sub,
                 email: decoded.email,
                 given_name: decoded.given_name,
-                family_name: decoded.family_name
+                family_name: decoded.family_name,
+                refresh_token: tokens.refresh_token
             }
+            //if(/https:\/\/www.googleapis.com\/auth\/spreadsheets/.test(tokens.scope)) {
+            //    newUser.refresh_token = tokens.refresh_token;
+            //}
             user = await this.userService.create(newUser);
+        } else {
+            if(tokens.refresh_token) {
+                await this.userService.update(user.sub, {
+                    refresh_token: tokens.refresh_token,
+                    access_method: 'oauth'
+                });
+            }
         }
+
         request.session.user = user;
 
         return {
