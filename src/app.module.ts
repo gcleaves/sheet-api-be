@@ -17,6 +17,7 @@ import {User} from "./users/user.entity";
 import {Sheet} from "./sheets/sheet.entity";
 import { ServiceAccountsController } from './service-accounts/service-accounts.controller';
 import { ServiceAccountsModule } from './service-accounts/service-accounts.module';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { ServiceAccountsModule } from './service-accounts/service-accounts.modul
     }),
     SheetsModule,
     ServiceAccountsModule,
+    CacheModule.register(),
   ],
   controllers: [AppController, ApiController, LoginController, SheetsController, ServiceAccountsController],
   providers: [AppService, ApiService, RateLimiterService, SheetsService],
