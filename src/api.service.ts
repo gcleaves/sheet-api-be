@@ -3,10 +3,9 @@ import { ConfigService} from "@nestjs/config";
 import { SheetUpdateDto, SheetQueryDto } from "./dto/sheet-update.dto";
 import axios from 'axios';
 import {GoogleSpreadsheet, GoogleSpreadsheetRow, GoogleSpreadsheetWorksheet} from 'google-spreadsheet';
-import { JWT } from 'google-auth-library'
+import { JWT, OAuth2Client } from 'google-auth-library'
 import { backOff } from "exponential-backoff";
 import {SheetsService} from "./sheets/sheets.service";
-import { OAuth2Client } from 'google-auth-library';
 import {Cache} from "cache-manager";
 import {CACHE_MANAGER} from "@nestjs/cache-manager";
 import { Sheet } from './sheets/sheet.entity';
@@ -14,6 +13,27 @@ import { Sheet } from './sheets/sheet.entity';
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
 ];
+
+/*
+https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
+
+const {OAuth2Client} = require('google-auth-library');
+const client = new OAuth2Client();
+async function verify() {
+  const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: CLIENT_ID,  // Specify the CLIENT_ID of the app that accesses the backend
+      // Or, if multiple clients access the backend:
+      //[CLIENT_ID_1, CLIENT_ID_2, CLIENT_ID_3]
+  });
+  const payload = ticket.getPayload();
+  const userid = payload['sub'];
+  // If request specified a G Suite domain:
+  // const domain = payload['hd'];
+}
+verify().catch(console.error);
+
+*/
 
 function evaluateRow(row, predicates, andOr = 'and') {
   let includeRow = (andOr === 'and');
@@ -126,7 +146,7 @@ export class ApiService {
         }
       });
     
-      await this.cacheManager.set('access:'+sheetId, theSheet, 1000 * 60);
+      await this.cacheManager.set('access:'+sheetId, theSheet, 60);
     } else {
       console.log('cache hit', 'access:'+sheetId);
     }
@@ -139,7 +159,7 @@ export class ApiService {
       });
       serviceAccountAuth.on('tokens', async (tokens)=> {
         console.log('service_account tokens!', tokens);
-        await this.cacheManager.set('token:'+sheetId, tokens, tokens.expiry_date - (new Date()).getTime());
+        await this.cacheManager.set('token:'+sheetId, tokens, (tokens.expiry_date - (new Date()).getTime())/1000 );
       });
 
       const tokens: any = await this.cacheManager.get('token:'+sheetId);
@@ -231,7 +251,7 @@ export class ApiService {
         r._rowNumber = row.rowNumber;
         if(rowHasValues) response.push(r);
       }
-      await this.cacheManager.set('allRows:'+sheetId, response, 1000*15);
+      await this.cacheManager.set('allRows:'+sheetId, response, 15);
       return response;
     } catch (e) {
       throw e;
