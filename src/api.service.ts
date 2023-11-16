@@ -9,6 +9,7 @@ import {SheetsService} from "./sheets/sheets.service";
 import { OAuth2Client } from 'google-auth-library';
 import {Cache} from "cache-manager";
 import {CACHE_MANAGER} from "@nestjs/cache-manager";
+import { Sheet } from './sheets/sheet.entity';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
@@ -94,53 +95,83 @@ function columnToLetter(column) {
 
 @Injectable()
 export class ApiService {
+  private readonly oauthClient: OAuth2Client;
+
   constructor(
       private configService: ConfigService,
       private sheetService: SheetsService,
       @Inject(CACHE_MANAGER) private cacheManager: Cache
-  ) {}
+  ) {
+    this.oauthClient = new OAuth2Client({
+      clientId: this.configService.get<string>('GOOGLE_CLIENT_ID'),
+      clientSecret: this.configService.get<string>('GOOGLE_CLIENT_SECRET'),
+    });
+    this.oauthClient.on('tokens', (tokens)=> {
+      console.log('oauthClient tokens!', tokens);
+    })
+  }
 
   async getAuthMethod(sheetId: string) {
-    const theSheet = await this.sheetService.findOneWithOptions({
-      relations: ['user'],
-      where: {sheet_id: sheetId},
-      select: {
-        user: {
-          access_method: true,
-          refresh_token: true,
-          service_account: true
+    let theSheet: Sheet = await this.cacheManager.get('access:'+sheetId);
+    if(!theSheet) {
+      theSheet = await this.sheetService.findOneWithOptions({
+        relations: ['user'],
+        where: {sheet_id: sheetId},
+        select: {
+          user: {
+            access_method: true,
+            refresh_token: true,
+            service_account: true
+          }
         }
-      }
-    });
+      });
+    
+      await this.cacheManager.set('access:'+sheetId, theSheet, 1000 * 60);
+    } else {
+      console.log('cache hit', 'access:'+sheetId);
+    }
+
     if(theSheet.user.access_method==='service_account') {
       const serviceAccountAuth = new JWT({
         email: theSheet.user.service_account.client_email,
         key: theSheet.user.service_account.private_key,
         scopes: SCOPES,
       });
-      return serviceAccountAuth;
+      serviceAccountAuth.on('tokens', async (tokens)=> {
+        console.log('service_account tokens!', tokens);
+        await this.cacheManager.set('token:'+sheetId, tokens, tokens.expiry_date - (new Date()).getTime());
+      });
+
+      const tokens: any = await this.cacheManager.get('token:'+sheetId);
+      if(tokens) {
+        const tokenTTL = (tokens.expiry_date - (new Date()).getTime()) / 1000;
+        console.log('cache hit', 'token:'+sheetId, tokenTTL);
+        if(tokenTTL < 30) {
+          console.log('less than 30s TTL, refreshing....');
+          return (await serviceAccountAuth.getAccessToken()).token;
+        }
+        return tokens.access_token;
+      }
+      
+      return (await serviceAccountAuth.getAccessToken()).token;
     }
     if(theSheet.user.access_method==='oauth') {
-      const oauthClient = new OAuth2Client({
-        clientId: this.configService.get<string>('GOOGLE_CLIENT_ID'),
-        clientSecret: this.configService.get<string>('GOOGLE_CLIENT_SECRET'),
-      });
-      oauthClient.setCredentials({
+      this.oauthClient.setCredentials({
         refresh_token: theSheet.user.refresh_token
       });
-      return oauthClient;
+      return this.oauthClient;
     }
   }
 
   async getSheet(sheetId: string, sheetName: string|null): Promise<GoogleSpreadsheetWorksheet> {
     const serviceAccountAuth = await this.getAuthMethod(sheetId);
-    serviceAccountAuth.on('tokens', (tokens)=> {
-      console.log('tokens!', tokens);
-    })
+    //serviceAccountAuth.on('tokens', (tokens)=> {
+    //  console.log('tokens!', tokens);
+    //})
 
     let doc;
     try {
-      doc = new GoogleSpreadsheet(sheetId, serviceAccountAuth);
+      doc = new GoogleSpreadsheet(sheetId, {token: serviceAccountAuth});
       await backOff(()=>doc.loadInfo(),
           {
             retry: (e, attemptNumber) => {
@@ -164,6 +195,12 @@ export class ApiService {
 
   async getAllRows(sheetId: string, sheetName: string|null, limit: number|null, offset: number|null): Promise<Record<string, any>[]> {
     try {
+      let allRows: any = await this.cacheManager.get('allRows:'+sheetId);
+      if(allRows) {
+        console.log('cache hit', 'allRows:'+sheetId);
+        return allRows;
+      }
+
       const response = [];
       const sheet = await this.getSheet(sheetId, sheetName);
 
@@ -194,6 +231,7 @@ export class ApiService {
         r._rowNumber = row.rowNumber;
         if(rowHasValues) response.push(r);
       }
+      await this.cacheManager.set('allRows:'+sheetId, response, 1000*15);
       return response;
     } catch (e) {
       throw e;
