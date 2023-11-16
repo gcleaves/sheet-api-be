@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Req, Res, Patch,
-    Body, Put, Delete, UseGuards, UseInterceptors } from '@nestjs/common';
+    Body, Put, Delete, UseGuards, UseInterceptors, Inject } from '@nestjs/common';
 import {Request, Response} from 'express';
 import {ApiService} from './api.service';
 import {ConfigService} from '@nestjs/config';
@@ -8,7 +8,9 @@ import {RateLimiterGuard} from "./rate-limiter/rate-limiter.guard";
 import {RateLimiter, RateLimiterKey} from "./rate-limiter/rate-limiter.decorator";
 import {UsersService} from "./users/users.service";
 import {SheetsService} from "./sheets/sheets.service";
-import {User} from './users/user.entity'
+import {User} from './users/user.entity';
+import {CACHE_MANAGER} from "@nestjs/cache-manager";
+import {Cache} from "cache-manager";
 
 @Controller('/api')
 @RateLimiter({points: 60, duration: 10, consume: 1})
@@ -18,8 +20,15 @@ export class ApiController {
         private readonly apiService: ApiService,
         private configService: ConfigService,
         private userService: UsersService,
-        private sheetService: SheetsService
+        private sheetService: SheetsService,
+        @Inject(CACHE_MANAGER) private cacheManager: Cache
     ) {}
+
+    @Get('clearCache')
+    async clearCache() {
+        await this.cacheManager.reset();
+        return 'OK';
+    }
 
     @Get('settings')
     async getSettings(@Req() req: Request): Promise<User> {

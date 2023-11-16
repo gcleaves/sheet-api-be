@@ -18,6 +18,8 @@ import {Sheet} from "./sheets/sheet.entity";
 import { ServiceAccountsController } from './service-accounts/service-accounts.controller';
 import { ServiceAccountsModule } from './service-accounts/service-accounts.module';
 import { CacheModule } from '@nestjs/cache-manager';
+import type { RedisClientOptions } from 'redis';
+import {redisStore} from 'cache-manager-redis-store';
 
 @Module({
   imports: [
@@ -39,7 +41,16 @@ import { CacheModule } from '@nestjs/cache-manager';
     }),
     SheetsModule,
     ServiceAccountsModule,
-    CacheModule.register(),
+    CacheModule.register({
+      // @ts-ignore
+      store: async () => await redisStore({
+        // Store-specific configuration:
+        socket: {
+          host: 'localhost',
+          port: 6379,
+        }
+      })
+    }),
   ],
   controllers: [AppController, ApiController, LoginController, SheetsController, ServiceAccountsController],
   providers: [AppService, ApiService, RateLimiterService, SheetsService],
