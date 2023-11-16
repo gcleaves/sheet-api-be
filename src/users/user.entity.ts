@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import {Sheet} from "../sheets/sheet.entity";
+import { Exclude, instanceToPlain, Expose } from 'class-transformer';
 
 @Entity()
 export class User {
@@ -21,13 +22,14 @@ export class User {
   @Column()
   sub: string;
 
-  @Column({select: false})
+  @Exclude({ toPlainOnly: true })
+  @Column({nullable: true})
   refresh_token: string;
 
   @Column({ default: 'service_account' })
   access_method: 'service_account'|'oauth';
 
-  @Column({type: 'json'})
+  @Column({type: 'json', nullable: true})
   service_account: {
     client_email: string,
     private_key: string
@@ -36,6 +38,12 @@ export class User {
   @OneToMany(type => Sheet, sheet => sheet.user, {eager: false})
   sheets: Sheet[];
 
-  //@OneToMany(type => ServiceAccount, serviceAccount => serviceAccount.user, {eager: false})
-  //service_accounts: ServiceAccount[];
+  @Expose()
+  get hasRefreshToken() {
+    return (this.refresh_token) ? true : false;
+  }
+
+  toJSON() {
+    return instanceToPlain(this);
+  }
 }

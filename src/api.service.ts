@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService} from "@nestjs/config";
 import { SheetUpdateDto, SheetQueryDto } from "./dto/sheet-update.dto";
 import axios from 'axios';
@@ -7,6 +7,8 @@ import { JWT } from 'google-auth-library'
 import { backOff } from "exponential-backoff";
 import {SheetsService} from "./sheets/sheets.service";
 import { OAuth2Client } from 'google-auth-library';
+import {Cache} from "cache-manager";
+import {CACHE_MANAGER} from "@nestjs/cache-manager";
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
@@ -94,7 +96,8 @@ function columnToLetter(column) {
 export class ApiService {
   constructor(
       private configService: ConfigService,
-      private sheetService: SheetsService
+      private sheetService: SheetsService,
+      @Inject(CACHE_MANAGER) private cacheManager: Cache
   ) {}
 
   async getAuthMethod(sheetId: string) {
@@ -131,6 +134,9 @@ export class ApiService {
 
   async getSheet(sheetId: string, sheetName: string|null): Promise<GoogleSpreadsheetWorksheet> {
     const serviceAccountAuth = await this.getAuthMethod(sheetId);
+    serviceAccountAuth.on('tokens', (tokens)=> {
+      console.log('tokens!', tokens);
+    })
 
     let doc;
     try {
