@@ -47,6 +47,7 @@ export class SheetsController {
 
     @Patch(':id')
     async updateSheet(@Req() req: Request) {
+        if(req.body && !req.body.sheet_id) throw {message:'missing sheet_id', statusCode: 400};
         const sheet = await this.sheetsService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
@@ -59,6 +60,7 @@ export class SheetsController {
     @Post()
     async createSheet(@Req() req: Request) {
         console.log('createSheet', req.body);
+        if(req.body && !req.body.sheet_id) throw {message:'missing sheet_id', statusCode: 400};
         if(!req.session.user) throw {message:'You must log in', statusCode: 401};
         const newSheet = {
             name: req.body.name,

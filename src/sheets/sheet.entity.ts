@@ -1,4 +1,4 @@
-import {Entity, Column, PrimaryGeneratedColumn, ManyToOne} from 'typeorm';
+import {Entity, Column, PrimaryGeneratedColumn, ManyToOne, Index} from 'typeorm';
 import {User} from "../users/user.entity";
 
 interface ApiKeys {
@@ -11,7 +11,11 @@ export class Sheet {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: false })
+  @Index({unique: true})
+  @Column()
+  uid: string;
+
+  @Column( {nullable: false})
   sheet_id: string;
 
   @Column({ nullable: true })

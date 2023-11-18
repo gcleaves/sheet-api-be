@@ -15,11 +15,10 @@ import { SheetsService } from './sheets/sheets.service';
 import { SheetsModule } from './sheets/sheets.module';
 import {User} from "./users/user.entity";
 import {Sheet} from "./sheets/sheet.entity";
-import { ServiceAccountsController } from './service-accounts/service-accounts.controller';
-import { ServiceAccountsModule } from './service-accounts/service-accounts.module';
 import { CacheModule } from '@nestjs/cache-manager';
-import type { RedisClientOptions } from 'redis';
-import {redisStore} from 'cache-manager-redis-store';
+import * as redisStore from 'cache-manager-redis-store';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
@@ -29,30 +28,29 @@ import {redisStore} from 'cache-manager-redis-store';
       load: [service_account],
     }),
     TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'sheetapi',
-      password: 'sheetapi',
-      database: 'sheetapi',
+      type: process.env.DB_TYPE as any || 'mysql',
+      host: process.env.DB_HOST as any || 'localhost',
+      port: process.env.DB_PORT as any || 3306,
+      username: process.env.DB_USER as any || 'sheetapi',
+      password: process.env.DB_PASSWORD as any || 'sheetapi',
+      database: process.env.DB_NAME as any || 'sheetapi',
       entities: [User,Sheet],
       synchronize: true,
       autoLoadEntities: true,
     }),
     SheetsModule,
-    ServiceAccountsModule,
     CacheModule.register({
-      // @ts-ignore
-      store: async () => await redisStore({
-        // Store-specific configuration:
-        socket: {
-          host: 'localhost',
-          port: 6379,
-        }
-      })
+      isGlobal: true,
+      store: redisStore,
+      host: 'localhost',
+      port: 6379,
+      db: 1
+    }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
     }),
   ],
-  controllers: [AppController, ApiController, LoginController, SheetsController, ServiceAccountsController],
+  controllers: [AppController, ApiController, LoginController, SheetsController],
   providers: [AppService, ApiService, RateLimiterService, SheetsService],
 })
 export class AppModule {
