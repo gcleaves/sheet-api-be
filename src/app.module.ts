@@ -42,9 +42,9 @@ import { join } from 'path';
     CacheModule.register({
       isGlobal: true,
       store: redisStore,
-      host: 'localhost',
-      port: 6379,
-      db: 1
+      host: process.env.REDIS_HOST as any || 'localhost',
+      port: process.env.REDIS_PORT as any || 6379,
+      db: process.env.REDIS_DB as any || 1
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
