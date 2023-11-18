@@ -14,27 +14,6 @@ const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
 ];
 
-/*
-https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
-
-const {OAuth2Client} = require('google-auth-library');
-const client = new OAuth2Client();
-async function verify() {
-  const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: CLIENT_ID,  // Specify the CLIENT_ID of the app that accesses the backend
-      // Or, if multiple clients access the backend:
-      //[CLIENT_ID_1, CLIENT_ID_2, CLIENT_ID_3]
-  });
-  const payload = ticket.getPayload();
-  const userid = payload['sub'];
-  // If request specified a G Suite domain:
-  // const domain = payload['hd'];
-}
-verify().catch(console.error);
-
-*/
-
 function evaluateRow(row, predicates, andOr = 'and') {
   let includeRow = (andOr === 'and');
   const r = row.toObject();
@@ -126,72 +105,102 @@ export class ApiService {
       clientId: this.configService.get<string>('GOOGLE_CLIENT_ID'),
       clientSecret: this.configService.get<string>('GOOGLE_CLIENT_SECRET'),
     });
-    this.oauthClient.on('tokens', (tokens)=> {
-      console.log('oauthClient tokens!', tokens);
+    this.oauthClient.on('tokens', async (tokens)=> {
+      const decoded = JSON.parse(atob(tokens.id_token.split('.')[1]));
+      console.log('oauth tokens!', decoded.email);
+      // @ts-ignore
+      await this.cacheManager.set('token:'+decoded.sub, tokens, { ttl: Math.floor((tokens.expiry_date - (new Date()).getTime()) / 1000 ) } );
     })
   }
 
-  async getAuthMethod(sheetId: string) {
-    let theSheet: Sheet = await this.cacheManager.get('access:'+sheetId);
+  async getAuthMethod(uid: string) {
+    let cacheKey = 'sheet:'+uid;
+    let theSheet: Sheet = await this.cacheManager.get(cacheKey);
     if(!theSheet) {
       theSheet = await this.sheetService.findOneWithOptions({
         relations: ['user'],
-        where: {sheet_id: sheetId},
-        select: {
-          user: {
-            access_method: true,
-            refresh_token: true,
-            service_account: true
-          }
-        }
+        where: {uid: uid}
       });
-    
-      await this.cacheManager.set('access:'+sheetId, theSheet, 60);
+      // @ts-ignore
+      await this.cacheManager.set(cacheKey, theSheet, {ttl: 30});
     } else {
-      console.log('cache hit', 'access:'+sheetId);
+      console.log('cache hit', cacheKey);
     }
 
+    cacheKey = 'token:'+theSheet.user.sub;
     if(theSheet.user.access_method==='service_account') {
+      if( !(theSheet.user.service_account && theSheet.user.service_account.client_email
+          && theSheet.user.service_account.private_key) ) {
+          throw {'message': 'missing service account info', statusCode: 401}
+      }
       const serviceAccountAuth = new JWT({
         email: theSheet.user.service_account.client_email,
         key: theSheet.user.service_account.private_key,
         scopes: SCOPES,
       });
+
       serviceAccountAuth.on('tokens', async (tokens)=> {
         console.log('service_account tokens!', tokens);
-        await this.cacheManager.set('token:'+sheetId, tokens, (tokens.expiry_date - (new Date()).getTime())/1000 );
+        // @ts-ignore
+        await this.cacheManager.set(cacheKey, tokens, { ttl: Math.floor((tokens.expiry_date - (new Date()).getTime()) / 1000 ) } );
       });
 
-      const tokens: any = await this.cacheManager.get('token:'+sheetId);
+      const tokens: any = await this.cacheManager.get(cacheKey);
       if(tokens) {
         const tokenTTL = (tokens.expiry_date - (new Date()).getTime()) / 1000;
-        console.log('cache hit', 'token:'+sheetId, tokenTTL);
+        console.log('cache hit', cacheKey, tokenTTL);
         if(tokenTTL < 30) {
           console.log('less than 30s TTL, refreshing....');
           return (await serviceAccountAuth.getAccessToken()).token;
         }
         return tokens.access_token;
       }
-      
+
       return (await serviceAccountAuth.getAccessToken()).token;
     }
+
     if(theSheet.user.access_method==='oauth') {
       this.oauthClient.setCredentials({
         refresh_token: theSheet.user.refresh_token
       });
-      return this.oauthClient;
+
+      let tokens: any = await this.cacheManager.get(cacheKey);
+      if(tokens) {
+        const tokenTTL = (tokens.expiry_date - (new Date()).getTime()) / 1000;
+        console.log('cache hit', cacheKey, tokenTTL);
+        if(tokenTTL < 3500) {
+          console.log('less than 30s TTL, refreshing....');
+          tokens = await this.oauthClient.getAccessToken();
+          return tokens.token;
+        }
+
+        return tokens.access_token;
+      }
+      tokens = await this.oauthClient.getAccessToken();
+      //console.log('token', await this.cacheManager.get(cacheKey))
+
+      return tokens.token;
     }
   }
 
-  async getSheet(sheetId: string, sheetName: string|null): Promise<GoogleSpreadsheetWorksheet> {
-    const serviceAccountAuth = await this.getAuthMethod(sheetId);
-    //serviceAccountAuth.on('tokens', (tokens)=> {
-    //  console.log('tokens!', tokens);
-    //})
+  async getSheet(uid: string, sheetName: string|null): Promise<GoogleSpreadsheetWorksheet> {
+    const serviceAccountAuth = await this.getAuthMethod(uid);
+    let cacheKey = 'sheet:'+uid;
+    let theSheet: Sheet = await this.cacheManager.get(cacheKey);
+    if(!theSheet) {
+      theSheet = await this.sheetService.findOneWithOptions({
+        relations: ['user'],
+        where: {uid: uid}
+      });
+      // @ts-ignore
+      await this.cacheManager.set(cacheKey, theSheet, {ttl: 30});
+    } else {
+      console.log('hit cache', 'sheet:' + uid)
+    }
 
     let doc;
     try {
-      doc = new GoogleSpreadsheet(sheetId, {token: serviceAccountAuth});
+      doc = new GoogleSpreadsheet(theSheet.sheet_id, {token: serviceAccountAuth});
       await backOff(()=>doc.loadInfo(),
           {
             retry: (e, attemptNumber) => {
@@ -213,16 +222,17 @@ export class ApiService {
     return sheet;
   }
 
-  async getAllRows(sheetId: string, sheetName: string|null, limit: number|null, offset: number|null): Promise<Record<string, any>[]> {
+  async getAllRows(uid: string, sheetName: string|null, limit: number|null, offset: number|null): Promise<Record<string, any>[]> {
+    let cacheKey = 'allRows:'+uid;
     try {
-      let allRows: any = await this.cacheManager.get('allRows:'+sheetId);
+      let allRows: any = await this.cacheManager.get(cacheKey);
       if(allRows) {
-        console.log('cache hit', 'allRows:'+sheetId);
+        console.log('cache hit', 'allRows:'+uid);
         return allRows;
       }
 
       const response = [];
-      const sheet = await this.getSheet(sheetId, sheetName);
+      const sheet = await this.getSheet(uid, sheetName);
 
       const rows: GoogleSpreadsheetRow[] = await backOff(() => sheet.getRows({ limit, offset}), {
         numOfAttempts: 5,
@@ -251,18 +261,19 @@ export class ApiService {
         r._rowNumber = row.rowNumber;
         if(rowHasValues) response.push(r);
       }
-      await this.cacheManager.set('allRows:'+sheetId, response, 15);
+      // @ts-ignore
+      await this.cacheManager.set(cacheKey, response, {ttl: 15} );
       return response;
     } catch (e) {
       throw e;
     }
   }
 
-  async search(sheetId: string, sheetName: string|null, predicates: any, andOr = 'and') {
+  async search(uid: string, sheetName: string|null, predicates: any, andOr = 'and') {
     console.log(predicates);
     const response = [];
 
-    const sheet = await this.getSheet(sheetId, sheetName);
+    const sheet = await this.getSheet(uid, sheetName);
 
     const rows: GoogleSpreadsheetRow[] = await backOff(() => sheet.getRows()); // can pass in
     for(const row of rows) {
@@ -285,12 +296,12 @@ export class ApiService {
     return response;
   }
 
-  async update(sheetId: string, sheetName: string|null, query: SheetQueryDto, update: Record<string, string|number>) {
+  async update(uid: string, sheetName: string|null, query: SheetQueryDto, update: Record<string, string|number>) {
     let rowsUpdated = 0;
     const rowsToUpdate = [];
     const rowsToSave = [];
 
-    const sheet = await this.getSheet(sheetId,sheetName);
+    const sheet = await this.getSheet(uid,sheetName);
     const rows: GoogleSpreadsheetRow[] = await backOff(() => sheet.getRows());
     const headerValues = sheet.headerValues;
     console.dir(headerValues, {depth: 10});
@@ -339,10 +350,11 @@ export class ApiService {
       payload.data.push(rangePayload);
     }
     console.dir(payload, {depth: 5});
-    const serviceAccountAuth = await this.getAuthMethod(sheetId);
-    const bearerToken = (await serviceAccountAuth.getAccessToken()).token;
+    //const serviceAccountAuth = await this.getAuthMethod(uid);
+    const bearerToken = await this.getAuthMethod(uid);
+    console.log('sheetId', sheet.sheetId);
     const response = await backOff(() => axios.request({
-      url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,
+      url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet._spreadsheet.spreadsheetId}/values:batchUpdate`,
       method: 'post',
       headers: {
         Authorization: 'Bearer ' + bearerToken
@@ -358,9 +370,10 @@ export class ApiService {
           console.log('429 backoff attempt: ' + attemptNumber);
           return true;
         }
-        throw {message: "Error accessing Google Sheets API.", statusCode: status};
+        throw {message: "Error accessing Google Sheets API."+e.message, statusCode: status};
       }
     });
+    await this.cacheManager.del('allRows:'+uid);
     //res.send(`${rowsUpdated} rows updated`);
     return {
       "totalUpdatedRows": response.data.totalUpdatedRows,
@@ -371,12 +384,12 @@ export class ApiService {
 
   /**
    *
-   * @param sheetId
+   * @param uid
    * @param sheetName
    * @param insert
    */
-  async insert(sheetId: string, sheetName: string|null, insert: Record<string, string|number>[]) {
-    const sheet = await this.getSheet(sheetId, sheetName);
+  async insert(uid: string, sheetName: string|null, insert: Record<string, string|number>[]) {
+    const sheet = await this.getSheet(uid, sheetName);
     const rows: GoogleSpreadsheetRow[] = await sheet.getRows();
     const headerValues = sheet.headerValues;
     let maxRow = 1;
@@ -397,8 +410,8 @@ export class ApiService {
     //console.log('maxRow', maxRow, 'rowCount', sheet.rowCount);
     //console.log('body', insert);
 
-    const serviceAccountAuth = await this.getAuthMethod(sheetId);
-    const bearerToken = (await serviceAccountAuth.getAccessToken()).token;
+    const bearerToken = await this.getAuthMethod(uid);
+
     // add rows if necessary
     if((maxRow + insert.length) > sheet.rowCount) {
       console.log("need new rows");
@@ -415,7 +428,7 @@ export class ApiService {
       }
 
       const response = await backOff(() => axios.request({
-        url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+        url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet._spreadsheet.spreadsheetId}:batchUpdate`,
         method: 'post',
         headers: {
           Authorization: 'Bearer ' + bearerToken
@@ -434,7 +447,7 @@ export class ApiService {
         }
       });
     }
-
+    await this.cacheManager.del('allRows:'+uid);
     const payload = {
       valueInputOption: "USER_ENTERED",
       data: []
@@ -471,7 +484,7 @@ export class ApiService {
     console.dir(payload, {depth: 5});
 
     const response = await backOff(() => axios.request({
-      url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`,
+      url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet._spreadsheet.spreadsheetId}/values:batchUpdate`,
       method: 'post',
       headers: {
         Authorization: 'Bearer ' + bearerToken
@@ -497,14 +510,14 @@ export class ApiService {
     }
   }
 
-  async delete(sheetId: string, sheetName: string|null, query: SheetQueryDto) {
+  async delete(uid: string, sheetName: string|null, query: SheetQueryDto) {
     const rowsToDelete = [];
     let rowsDeleted = 0;
     const deletePayload = {
       requests: []
     }
 
-    const sheet = await this.getSheet(sheetId,sheetName);
+    const sheet = await this.getSheet(uid,sheetName);
     const rows: GoogleSpreadsheetRow[] = await backOff(() => sheet.getRows());
     const headerValues = sheet.headerValues;
     console.dir(headerValues, {depth: 10});
@@ -537,10 +550,9 @@ export class ApiService {
 
     console.dir(deletePayload, {depth: 5});
 
-    const serviceAccountAuth = await this.getAuthMethod(sheetId);
-    const bearerToken = (await serviceAccountAuth.getAccessToken()).token;
+    const bearerToken = await this.getAuthMethod(uid);
     const response = await backOff(() => axios.request({
-      url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+      url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet._spreadsheet.spreadsheetId}:batchUpdate`,
       method: 'post',
       headers: {
         Authorization: 'Bearer ' + bearerToken
@@ -563,7 +575,7 @@ export class ApiService {
         throw {message: `Error accessing Google Sheets API: ${message} ${extraInfo}`, statusCode: status};
       }
     });
-
+    await this.cacheManager.del('allRows:'+uid);
     return {rowsDeleted: rowsDeleted};
   }
 

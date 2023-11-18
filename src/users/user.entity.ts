@@ -44,6 +44,7 @@ export class User {
   }
 
   toJSON() {
+    //if(this.service_account) delete this.service_account.private_key;
     return instanceToPlain(this);
   }
 }

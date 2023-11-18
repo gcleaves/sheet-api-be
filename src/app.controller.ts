@@ -7,7 +7,7 @@ import { RateLimiter, RateLimiterKey } from "./rate-limiter/rate-limiter.decorat
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
+  @Get('hello')
   @RateLimiter({points: 60, duration: 10, consume: 1})
   @UseGuards(RateLimiterGuard)
   async getHello(): Promise<string> {

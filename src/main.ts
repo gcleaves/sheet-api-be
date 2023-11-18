@@ -7,7 +7,7 @@ import Redis from 'ioredis';
 const redis = new Redis();
 const redisStore = new RedisStore({
     client: redis,
-    prefix: "sheets:",
+    prefix: "sheets-session:",
 })
 
 async function bootstrap() {

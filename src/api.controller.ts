@@ -24,6 +24,23 @@ export class ApiController {
         @Inject(CACHE_MANAGER) private cacheManager: Cache
     ) {}
 
+    @Delete('refreshToken')
+    async removeAccess(@Req() req: Request) {
+        if(!req.session.user) {
+            throw {message: 'you must log in', statusCode: 401}
+        }
+        const user = await this.userService.findOne(req.session.user.sub)
+        if(user.id != req.body.user_id) throw {message: 'Please refresh the page', statusCode: 400}
+        if(!user) {
+            throw {message: 'you must log in', statusCode: 401}
+        }
+        await this.cacheManager.del('token:'+req.session.user.sub);
+        return (await this.userService.update(req.session.user.sub, {
+            refresh_token: null,
+            access_method: "service_account"
+        }));
+    }
+
     @Get('clearCache')
     async clearCache() {
         await this.cacheManager.reset();
@@ -51,7 +68,7 @@ export class ApiController {
     }
 
     @Patch('settings')
-    async updateSettings(@Req() req: Request, @Res() res: Response) {
+    async updateSettings(@Req() req: Request) {
         //console.log('patch settings body', req.body);
         if(!req.session.user) {
             throw {message: 'you must log in', statusCode: 401}
@@ -75,21 +92,20 @@ export class ApiController {
         ) {
             throw {message: 'JSON error, must be an object', statusCode: 400}
         }
+        await this.cacheManager.del('token:'+req.session.user.sub);
 
-        res.send(await this.userService.update(req.session.user.sub, {
+        return (await this.userService.update(req.session.user.sub, {
             access_method: req.body.access_method,
             service_account: sa
         }));
-
-        return;
     }
 
-    @Get('sheet/:sheetId')
+    @Get('sheet/:uid')
     async getAllRows(@Param() params: any, @Req() req: Request): Promise<Record<string, any>> {
         const theSheet = await this.sheetService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
-            where: {sheet_id: params.sheetId, 'user.id': req.session.user.id}
+            where: {uid: params.uid}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -103,10 +119,10 @@ export class ApiController {
         const limit: number = +req.query._limit as number;
         const offset: number = +req.query._offset as number;
 
-        return this.apiService.getAllRows(params.sheetId, sheet, limit, offset);
+        return this.apiService.getAllRows(params.uid, sheet, limit, offset);
     }
 
-    @Get('sheet/:sheetId/search')
+    @Get('sheet/:uid/search')
     async search(@Param() params: any, @Req() req: Request): Promise<any> {
         const sheet: string = req.query._sheet as string;
         console.log('search query', req.query);
@@ -114,7 +130,7 @@ export class ApiController {
         const theSheet = await this.sheetService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
-            where: {sheet_id: params.sheetId, 'user.id': req.session.user.id}
+            where: {uid: params.uid, 'user.id': req.session.user.id}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -128,17 +144,17 @@ export class ApiController {
         delete predicates._sheet;
         delete predicates['_x-api-key'];
 
-        return this.apiService.search(params.sheetId, sheet, predicates, 'and');
+        return this.apiService.search(params.uid, sheet, predicates, 'and');
     }
 
-    @Get('sheet/:sheetId/search_or')
+    @Get('sheet/:uid/search_or')
     async search_or(@Param() params: any, @Req() req: Request): Promise<Record<string, any>> {
         const sheet: string = req.query._sheet as string;
 
         const theSheet = await this.sheetService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
-            where: {sheet_id: params.sheetId, 'user.id': req.session.user.id}
+            where: {uid: params.uid, 'user.id': req.session.user.id}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -151,10 +167,10 @@ export class ApiController {
         const predicates = {...req.query};
         delete predicates._sheet;
 
-        return this.apiService.search(params.sheetId, sheet, predicates, 'or');
+        return this.apiService.search(params.uid, sheet, predicates, 'or');
     }
 
-    @Patch('sheet/:sheetId')
+    @Patch('sheet/:uid')
     async update(@Param() params: any, @Req() req: Request, @Body() body: SheetUpdateDto): Promise<any> {
         const sheetName: string = req.query._sheet as string;
         const query = body.query;
@@ -163,7 +179,7 @@ export class ApiController {
         const theSheet = await this.sheetService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
-            where: {sheet_id: params.sheetId, 'user.id': req.session.user.id}
+            where: {uid: params.uid}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -173,17 +189,17 @@ export class ApiController {
             throw {message: 'Unauthorized, confirm x-api-key header.', statusCode: 403};
         }
 
-        return this.apiService.update(params.sheetId, sheetName, query, update);
+        return this.apiService.update(params.uid, sheetName, query, update);
     }
 
-    @Put('sheet/:sheetId')
+    @Put('sheet/:uid')
     async insert(@Param() params: any, @Req() req: Request, @Body() body: SheetInsertDto): Promise<any> {
         const sheetName: string = req.query._sheet as string;
 
         const theSheet = await this.sheetService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
-            where: {sheet_id: params.sheetId, 'user.id': req.session.user.id}
+            where: {uid: params.uid}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -193,18 +209,17 @@ export class ApiController {
             throw {message: 'Unauthorized, confirm x-api-key header.', statusCode: 403};
         }
 
-
-        return this.apiService.insert(params.sheetId, sheetName, body.insert);
+        return this.apiService.insert(params.uid, sheetName, body.insert);
     }
 
-    @Delete('sheet/:sheetId')
+    @Delete('sheet/:uid')
     async delete(@Param() params: any, @Req() req: Request, @Body() query: SheetQueryDto): Promise<any> {
         const sheetName: string = req.query._sheet as string;
 
         const theSheet = await this.sheetService.findOneWithOptions({
             relations: ['user'],
             loadRelationIds: true,
-            where: {sheet_id: params.sheetId, 'user.id': req.session.user.id}
+            where: {uid: params.uid}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -214,6 +229,6 @@ export class ApiController {
             throw {message: 'Unauthorized, confirm x-api-key header.', statusCode: 403};
         }
 
-        return this.apiService.delete(params.sheetId, sheetName, query);
+        return this.apiService.delete(params.uid, sheetName, query);
     }
 }
