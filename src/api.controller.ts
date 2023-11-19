@@ -35,6 +35,7 @@ export class ApiController {
             throw {message: 'you must log in', statusCode: 401}
         }
         await this.cacheManager.del('token:'+req.session.user.sub);
+        await this.apiService.revokeToken(user.refresh_token);
         return (await this.userService.update(req.session.user.sub, {
             refresh_token: null,
             access_method: "service_account"
