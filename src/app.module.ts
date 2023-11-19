@@ -35,7 +35,7 @@ import { join } from 'path';
       password: process.env.DB_PASSWORD as any || 'sheetapi',
       database: process.env.DB_NAME as any || 'sheetapi',
       entities: [User,Sheet],
-      synchronize: true,
+      synchronize: ((process.env.DB_SYNC as any || 'false').toLowerCase()) === 'true',
       autoLoadEntities: true,
     }),
     SheetsModule,
