@@ -113,7 +113,13 @@ export class ApiService {
     })
   }
 
+  async revokeToken(token) {
+    await this.oauthClient.revokeToken(token);
+  }
+
   async getAuthMethod(uid: string) {
+    //console.log('client_email', this.configService.get('service_account').client_email)
+
     let cacheKey = 'sheet:'+uid;
     let theSheet: Sheet = await this.cacheManager.get(cacheKey);
     if(!theSheet) {
@@ -131,7 +137,10 @@ export class ApiService {
     if(theSheet.user.access_method==='service_account') {
       if( !(theSheet.user.service_account && theSheet.user.service_account.client_email
           && theSheet.user.service_account.private_key) ) {
-          throw {'message': 'missing service account info', statusCode: 401}
+          //throw {'message': 'missing service account info', statusCode: 401}
+        console.log('missing service account info, attempting with default.')
+        theSheet.user.service_account.client_email = this.configService.get('service_account').client_email;
+        theSheet.user.service_account.private_key = this.configService.get('service_account').private_key;
       }
       const serviceAccountAuth = new JWT({
         email: theSheet.user.service_account.client_email,
