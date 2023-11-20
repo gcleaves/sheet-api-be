@@ -139,6 +139,7 @@ export class ApiService {
           && theSheet.user.service_account.private_key) ) {
           //throw {'message': 'missing service account info', statusCode: 401}
         console.log('missing service account info, attempting with default.')
+        //console.log('service account', this.configService.get('service_account'))
         theSheet.user.service_account.client_email = this.configService.get('service_account').client_email;
         theSheet.user.service_account.private_key = this.configService.get('service_account').private_key;
       }

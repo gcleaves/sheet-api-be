@@ -10,7 +10,7 @@ Proper docs to follow.
 
 Relies on a MySQL DB and Redis for cache and session storage.
 
-nuxi generate
+npx nuxi generate
 
 service_account.json
 
