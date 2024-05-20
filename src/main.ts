@@ -16,7 +16,7 @@ const redisStore = new RedisStore({
 })
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(AppModule, { cors: true });
     //console.log('SESSION_SECRET', app.get(ConfigService).get('SESSION_SECRET'));
     app.use(
         session({

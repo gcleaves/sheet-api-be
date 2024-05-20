@@ -129,9 +129,9 @@ export class ApiController {
         console.log('search query', req.query);
 
         const theSheet = await this.sheetService.findOneWithOptions({
-            relations: ['user'],
-            loadRelationIds: true,
-            where: {uid: params.uid, 'user.id': req.session.user.id}
+            //relations: ['user'],
+            //loadRelationIds: true,
+            where: {uid: params.uid} //, 'user.id': req.session.user.id}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
@@ -153,9 +153,9 @@ export class ApiController {
         const sheet: string = req.query._sheet as string;
 
         const theSheet = await this.sheetService.findOneWithOptions({
-            relations: ['user'],
-            loadRelationIds: true,
-            where: {uid: params.uid, 'user.id': req.session.user.id}
+            //relations: ['user'],
+            //loadRelationIds: true,
+            where: {uid: params.uid } //, 'user.id': req.session.user.id}
         });
         //console.log(theSheet, request.headers['x-api-key']);
         if(!theSheet) throw {message: 'Sheet not found.', statusCode: 404}
