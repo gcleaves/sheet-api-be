@@ -343,7 +343,7 @@ export class ApiService {
       for(const [k,v] of headerValues.entries()) {
         let value = null;
         if(v) {
-          value = update[v] || null;
+          value = (update[v]===undefined || update[v]===null) ? null : update[v];  //update[v] || null;
         }
         values.push(value);
       }
