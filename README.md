@@ -15,3 +15,5 @@ npx nuxi generate
 service_account.json
 
 DB_SYNC=true then change to false
+
+docker run  --restart=unless-stopped -d -p 3010:3000 --name sheet-api-be -v /usr/src/sheet-api-be:/app -v /usr/src/sheet-api-be/public:/app/public -v /app/node_modules -e REDIS_HOST=10.0.0.4 gcleaves/sheet-api-be:1.1 npm run start
