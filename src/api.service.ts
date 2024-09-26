@@ -10,6 +10,7 @@ import {Cache} from "cache-manager";
 import {CACHE_MANAGER} from "@nestjs/cache-manager";
 import { Sheet } from './sheets/sheet.entity';
 import { Queue } from 'bullmq';
+
 const queue = new Queue('insert', { 
   connection: {
       host: process.env.REDIS_HOST as any || 'localhost',
@@ -392,6 +393,7 @@ export class ApiService {
         throw {message: "Error accessing Google Sheets API."+e.message, statusCode: status};
       }
     });
+    
     await this.cacheManager.del('allRows:'+uid);
     //res.send(`${rowsUpdated} rows updated`);
     return {
@@ -411,6 +413,7 @@ export class ApiService {
     const job = await queue.add('insert', { uid, sheetName, insert });
     
     return job.id;
+
 
     const sheet = await this.getSheet(uid, sheetName);
     const added = await sheet.addRows(insert);
