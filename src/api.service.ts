@@ -9,6 +9,15 @@ import {SheetsService} from "./sheets/sheets.service";
 import {Cache} from "cache-manager";
 import {CACHE_MANAGER} from "@nestjs/cache-manager";
 import { Sheet } from './sheets/sheet.entity';
+import { Queue } from 'bullmq';
+const queue = new Queue('insert', { 
+  connection: {
+      host: process.env.REDIS_HOST as any || 'localhost',
+      port: process.env.REDIS_PORT as any || 6379,
+      db: process.env.REDIS_DB as any || 1
+  }
+});
+
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets'
@@ -399,7 +408,15 @@ export class ApiService {
    * @param insert
    */
   async insert(uid: string, sheetName: string|null, insert: Record<string, string|number>[]) {
+    const job = await queue.add('insert', { uid, sheetName, insert });
+    
+    return job.id;
+
     const sheet = await this.getSheet(uid, sheetName);
+    const added = await sheet.addRows(insert);
+
+    //return added.map(a=>a.toObject());
+
     const rows: GoogleSpreadsheetRow[] = await sheet.getRows();
     const headerValues = sheet.headerValues;
     let maxRow = 1;
