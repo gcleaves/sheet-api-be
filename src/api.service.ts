@@ -409,8 +409,8 @@ export class ApiService {
    * @param sheetName
    * @param insert
    */
-  async insert(uid: string, sheetName: string|null, insert: Record<string, string|number>[]) {
-    const job = await queue.add('insert', { uid, sheetName, insert });
+  async insert(uid: string, sheetName: string|null, insert: Record<string, string|number>[], append = true) {
+    const job = await queue.add('insert', { uid, sheetName, insert, append });
     
     return job.id;
 

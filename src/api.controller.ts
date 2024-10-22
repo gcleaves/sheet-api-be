@@ -210,7 +210,7 @@ export class ApiController {
             throw {message: 'Unauthorized, confirm x-api-key header.', statusCode: 403};
         }
 
-        return this.apiService.insert(params.uid, sheetName, body.insert);
+        return this.apiService.insert(params.uid, sheetName, body.insert, body.append);
     }
 
     @Delete('sheet/:uid')

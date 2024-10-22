@@ -10,4 +10,5 @@ export class SheetUpdateDto {
 
 export class SheetInsertDto {
   insert: Record<string, string | number>[];
+  append?: boolean
 }

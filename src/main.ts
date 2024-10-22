@@ -39,7 +39,10 @@ async function bootstrap() {
         console.log('job', job.data);
 
         const sheet = await apiService.getSheet(job.data.uid, job.data.sheetName);
-        const added = await sheet.addRows(job.data.insert);
+	const insert = (job.data.append===false) ? false : true;
+        const added = await sheet.addRows(job.data.insert, { insert: insert });
+	console.log('insert', insert);
+	console.log('job.data', job.data);
         
         return added.map(a=>a.toObject());
     }, { 
